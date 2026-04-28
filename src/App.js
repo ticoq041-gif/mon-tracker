@@ -64,7 +64,8 @@ export default function App() {
 
   return (
     <div style={{ padding: 20, fontFamily: "Arial", maxWidth: 600, margin: "0 auto" }}>
-      <h1>🎬 Mon Tracker</h1>
+      <h1>🎬 My Current Medias
+      </h1>
 
       <div style={{ position: "relative" }}>
         <input
