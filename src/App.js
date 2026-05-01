@@ -149,7 +149,7 @@ export default function App() {
                 : <div style={{ height: 200, background: "#333", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>🎬</div>
               }
 
-              {/* Overlay */}
+              {/* Overlay au survol */}
               <div className="overlay" style={{
                 position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                 background: "rgba(0,0,0,0.85)", opacity: 0, transition: "opacity 0.3s",
@@ -158,30 +158,19 @@ export default function App() {
                 <button onClick={() => toggleFavorite(realIndex)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer" }}>
                   {item.favorite ? "❤️" : "🤍"}
                 </button>
-                <button onClick={() => toggleStatus(realIndex)} style={{
-                  background: item.status === "en cours" ? "#E50914" : "#46d369",
-                  border: "none", color: "white", padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12
-                }}>
-                  {item.status}
-                </button>
 
-                {/* Saison / Épisode — uniquement pour séries et animés */}
                 {item.type !== "movie" && (
                   <div style={{ textAlign: "center" }}>
                     {editEp === realIndex ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <span style={{ fontSize: 11, color: "#aaa" }}>S</span>
-                          <input
-                            type="number" min="1"
-                            value={item.season}
+                          <input type="number" min="1" value={item.season}
                             onChange={e => updateEpisode(realIndex, parseInt(e.target.value) || 1, item.episode)}
                             style={{ width: 40, padding: 2, background: "#333", border: "1px solid #555", color: "white", borderRadius: 4, textAlign: "center" }}
                           />
                           <span style={{ fontSize: 11, color: "#aaa" }}>EP</span>
-                          <input
-                            type="number" min="1"
-                            value={item.episode}
+                          <input type="number" min="1" value={item.episode}
                             onChange={e => updateEpisode(realIndex, item.season, parseInt(e.target.value) || 1)}
                             style={{ width: 40, padding: 2, background: "#333", border: "1px solid #555", color: "white", borderRadius: 4, textAlign: "center" }}
                           />
@@ -196,9 +185,22 @@ export default function App() {
                   </div>
                 )}
 
+                {item.status !== "terminé" ? (
+                  <button onClick={() => toggleStatus(realIndex)} style={{
+                    background: "#46d369", border: "none", color: "white",
+                    borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: "bold"
+                  }}>✅ Terminer</button>
+                ) : (
+                  <button onClick={() => toggleStatus(realIndex)} style={{
+                    background: "#E50914", border: "none", color: "white",
+                    borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: "bold"
+                  }}>🔄 Remettre en cours</button>
+                )}
+
                 <button onClick={() => deleteItem(realIndex)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>🗑️</button>
               </div>
 
+              {/* Infos en bas */}
               <div style={{ padding: "8px 10px" }}>
                 <div style={{ fontWeight: "bold", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
                 <div style={{ fontSize: 11, color: "#aaa" }}>
