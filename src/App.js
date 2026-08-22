@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
+import { auth, db } from "./firebase";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile
+} from "firebase/auth";
+import {
+  doc, setDoc, getDoc
+} from "firebase/firestore";
 
 const API_KEY = "92d6d95f9796472b9e926158547d5267";
-
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
-  useEffect(() => {
-    const handle = () => setIsMobile(window.innerWidth < 600);
-    window.addEventListener("resize", handle);
-    return () => window.removeEventListener("resize", handle);
-  }, []);
-  return isMobile;
-};
 
 const getPlatform = (item) => {
   const title = encodeURIComponent(item.title);
@@ -23,15 +24,26 @@ const getPlatform = (item) => {
 
 const AVATARS = ["🎬", "🎮", "🦁", "🐉", "🌙", "⚡", "🔥", "🎭"];
 
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
+  useEffect(() => {
+    const handle = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  }, []);
+  return isMobile;
+};
+
 export default function App() {
   const isMobile = useIsMobile();
   const [currentUser, setCurrentUser] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [screen, setScreen] = useState("login");
-  const [loginName, setLoginName] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginError, setLoginError] = useState("");
   const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
   const [regPass, setRegPass] = useState("");
   const [regAvatar, setRegAvatar] = useState("🎬");
   const [regError, setRegError] = useState("");
@@ -40,26 +52,42 @@ export default function App() {
   const [filter, setFilter] = useState("tous");
   const [editEp, setEditEp] = useState(null);
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const getUsers = () => JSON.parse(localStorage.getItem("users") || "{}");
-  const saveUsers = (users) => localStorage.setItem("users", JSON.stringify(users));
-
+  // Écoute l'état de connexion Firebase
   useEffect(() => {
-    if (currentUser) {
-      const users = getUsers();
-      setItems(users[currentUser.name]?.items || []);
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-      const users = getUsers();
-      if (users[currentUser.name]) {
-        users[currentUser.name].items = items;
-        saveUsers(users);
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const docRef = doc(db, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+        const data = docSnap.exists() ? docSnap.data() : {};
+        setCurrentUser({ name: user.displayName, avatar: data.avatar || "🎬", email: user.email });
+        setItems(data.items || []);
+        setScreen("app");
+      } else {
+        setCurrentUser(null);
+        setScreen("login");
       }
-    }
-  }, [items, currentUser]);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  // Sauvegarde dans Firestore
+  useEffect(() => {
+    if (!currentUser || loading) return;
+    const saveData = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        await setDoc(doc(db, "users", user.uid), {
+          avatar: currentUser.avatar,
+          items: items
+        });
+      }
+    };
+    const timer = setTimeout(saveData, 1000);
+    return () => clearTimeout(timer);
+  }, [items, currentUser, loading]);
 
   useEffect(() => {
     if (title.length < 2) { setSuggestions([]); return; }
@@ -73,34 +101,35 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [title]);
 
-  const handleLogin = () => {
-    const users = getUsers();
-    if (!users[loginName]) { setLoginError("Utilisateur introuvable"); return; }
-    if (users[loginName].password !== loginPass) { setLoginError("Mot de passe incorrect"); return; }
-    setCurrentUser({ name: loginName, avatar: users[loginName].avatar });
-    setScreen("app");
-    setLoginError("");
+  const handleLogin = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail, loginPass);
+      setLoginError("");
+    } catch {
+      setLoginError("Email ou mot de passe incorrect");
+    }
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!regName.trim()) { setRegError("Entre un nom d'utilisateur"); return; }
-    if (regPass.length < 4) { setRegError("Mot de passe trop court (min 4)"); return; }
-    const users = getUsers();
-    if (users[regName]) { setRegError("Ce nom est déjà pris"); return; }
-    users[regName] = { password: regPass, avatar: regAvatar, items: [] };
-    saveUsers(users);
-    setCurrentUser({ name: regName, avatar: regAvatar });
-    setScreen("app");
-    setRegError("");
+    if (regPass.length < 6) { setRegError("Mot de passe trop court (min 6)"); return; }
+    try {
+      const userCred = await createUserWithEmailAndPassword(auth, regEmail, regPass);
+      await updateProfile(userCred.user, { displayName: regName });
+      await setDoc(doc(db, "users", userCred.user.uid), {
+        avatar: regAvatar,
+        items: []
+      });
+      setRegError("");
+    } catch (e) {
+      setRegError(e.message.includes("email") ? "Email invalide ou déjà utilisé" : "Erreur lors de la création");
+    }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await signOut(auth);
     setItems([]);
-    setScreen("login");
     setShowUserMenu(false);
-    setLoginName("");
-    setLoginPass("");
   };
 
   const addItem = (suggestion) => {
@@ -154,12 +183,18 @@ export default function App() {
     color: "white", boxSizing: "border-box", outline: "none", fontSize: 15
   };
 
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#141414", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ color: "#E50914", fontSize: 20 }}>🎬 Chargement...</p>
+    </div>
+  );
+
   // 🔐 LOGIN
   if (screen === "login") return (
     <div style={{ minHeight: "100vh", background: "#141414", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial", padding: 20 }}>
       <div style={{ background: "#222", padding: isMobile ? 24 : 40, borderRadius: 12, width: "100%", maxWidth: 340 }}>
-        <h2 style={{ color: "#E50914", textAlign: "center", margin: "0 0 24px", fontSize: isMobile ? 20 : 24 }}>🎬 My Current Medias</h2>
-        <input value={loginName} onChange={e => setLoginName(e.target.value)} placeholder="Nom d'utilisateur" style={inputStyle} />
+        <h2 style={{ color: "#E50914", textAlign: "center", margin: "0 0 24px" }}>🎬 My Current Medias</h2>
+        <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" style={inputStyle} />
         <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Mot de passe"
           onKeyDown={e => e.key === "Enter" && handleLogin()} style={inputStyle} />
         {loginError && <p style={{ color: "#E50914", fontSize: 13, margin: "0 0 12px" }}>{loginError}</p>}
@@ -179,7 +214,8 @@ export default function App() {
       <div style={{ background: "#222", padding: isMobile ? 24 : 40, borderRadius: 12, width: "100%", maxWidth: 340 }}>
         <h2 style={{ color: "#E50914", textAlign: "center", margin: "0 0 24px" }}>Créer un compte</h2>
         <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="Nom d'utilisateur" style={inputStyle} />
-        <input type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="Mot de passe (min 4)" style={inputStyle} />
+        <input value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="Email" style={inputStyle} />
+        <input type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="Mot de passe (min 6)" style={inputStyle} />
         <p style={{ color: "#aaa", fontSize: 13, margin: "0 0 10px" }}>Choisis ton avatar :</p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {AVATARS.map(a => (
@@ -204,7 +240,6 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "#141414", color: "white", fontFamily: "Arial", display: "flex", flexDirection: "column" }}>
 
-      {/* Header */}
       <div style={{ background: "#000", padding: isMobile ? "12px 16px" : "16px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ color: "#E50914", margin: 0, fontSize: isMobile ? 16 : 22, fontWeight: "bold" }}>🎬 {isMobile ? "MCM" : "My Current Medias"}</h1>
@@ -214,21 +249,22 @@ export default function App() {
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
             background: "#222", border: "1px solid #444", borderRadius: 8,
-            color: "white", padding: isMobile ? "6px 10px" : "8px 14px", cursor: "pointer", fontSize: isMobile ? 14 : 16,
+            color: "white", padding: isMobile ? "6px 10px" : "8px 14px", cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6
           }}>
-            <span>{currentUser.avatar}</span>
-            {!isMobile && <span style={{ fontSize: 14 }}>{currentUser.name}</span>}
+            <span>{currentUser?.avatar}</span>
+            {!isMobile && <span style={{ fontSize: 14 }}>{currentUser?.name}</span>}
             <span style={{ fontSize: 11, color: "#aaa" }}>▼</span>
           </button>
 
           {showUserMenu && (
             <div style={{
               position: "absolute", right: 0, top: "110%", background: "#222",
-              border: "1px solid #444", borderRadius: 8, overflow: "hidden", minWidth: 160, zIndex: 100
+              border: "1px solid #444", borderRadius: 8, overflow: "hidden", minWidth: 180, zIndex: 100
             }}>
               <div style={{ padding: "12px 16px", borderBottom: "1px solid #333", color: "#aaa", fontSize: 12 }}>
-                Connecté en tant que<br /><strong style={{ color: "white" }}>{currentUser.name}</strong>
+                <div>{currentUser?.name}</div>
+                <div style={{ fontSize: 11, marginTop: 2 }}>{currentUser?.email}</div>
               </div>
               <button onClick={handleLogout} style={{
                 width: "100%", padding: "10px 16px", background: "none", border: "none",
@@ -239,16 +275,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Contenu */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
 
-        {/* Search */}
         <div style={{ padding: isMobile ? "16px" : "30px 40px", width: "100%", maxWidth: 900, boxSizing: "border-box" }}>
           <div style={{ position: "relative" }}>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="🔍 Rechercher..."
+              placeholder="🔍 Rechercher un film / série / animé..."
               style={{
                 width: "100%", padding: "12px 16px", fontSize: isMobile ? 14 : 16,
                 background: "#333", border: "1px solid #555", borderRadius: 6,
@@ -278,7 +312,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Filtres */}
           <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center", flexWrap: "wrap" }}>
             {["tous", "en cours", "terminé", "favoris"].map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
@@ -291,7 +324,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Grille */}
         <div style={{ padding: isMobile ? "0 12px 24px" : "0 40px 40px", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: isMobile ? 12 : 20, maxWidth: 900, width: "100%", boxSizing: "border-box" }}>
           {filtered.map((item, index) => {
             const realIndex = items.indexOf(item);
@@ -377,7 +409,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Footer */}
       <div style={{ background: "#000", padding: "14px 20px", textAlign: "center", borderTop: "1px solid #222" }}>
         <span style={{ color: "#555", fontSize: 11 }}>My Current Medias — </span>
         <span style={{ background: "#E50914", color: "white", fontSize: 10, fontWeight: "bold", padding: "2px 6px", borderRadius: 4 }}>Version Bêta</span>
