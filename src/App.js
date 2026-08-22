@@ -1,3 +1,4 @@
+import Logo from "./Logo";
 import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import {
@@ -7,9 +8,7 @@ import {
   onAuthStateChanged,
   updateProfile
 } from "firebase/auth";
-import {
-  doc, setDoc, getDoc
-} from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 const API_KEY = process.env.REACT_APP_TMDB_KEY;
 
@@ -54,7 +53,6 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Écoute l'état de connexion Firebase
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -73,7 +71,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Sauvegarde dans Firestore
   useEffect(() => {
     if (!currentUser || loading) return;
     const saveData = async () => {
@@ -116,10 +113,7 @@ export default function App() {
     try {
       const userCred = await createUserWithEmailAndPassword(auth, regEmail, regPass);
       await updateProfile(userCred.user, { displayName: regName });
-      await setDoc(doc(db, "users", userCred.user.uid), {
-        avatar: regAvatar,
-        items: []
-      });
+      await setDoc(doc(db, "users", userCred.user.uid), { avatar: regAvatar, items: [] });
       setRegError("");
     } catch (e) {
       setRegError(e.message.includes("email") ? "Email invalide ou déjà utilisé" : "Erreur lors de la création");
@@ -189,11 +183,10 @@ export default function App() {
     </div>
   );
 
-  // 🔐 LOGIN
   if (screen === "login") return (
     <div style={{ minHeight: "100vh", background: "#141414", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial", padding: 20 }}>
       <div style={{ background: "#222", padding: isMobile ? 24 : 40, borderRadius: 12, width: "100%", maxWidth: 340 }}>
-        <h2 style={{ color: "#E50914", textAlign: "center", margin: "0 0 24px" }}>🎬 My Current Medias</h2>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}><Logo /></div>
         <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" style={inputStyle} />
         <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Mot de passe"
           onKeyDown={e => e.key === "Enter" && handleLogin()} style={inputStyle} />
@@ -208,7 +201,6 @@ export default function App() {
     </div>
   );
 
-  // 📝 REGISTER
   if (screen === "register") return (
     <div style={{ minHeight: "100vh", background: "#141414", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Arial", padding: 20 }}>
       <div style={{ background: "#222", padding: isMobile ? 24 : 40, borderRadius: 12, width: "100%", maxWidth: 340 }}>
@@ -236,15 +228,11 @@ export default function App() {
     </div>
   );
 
-  // 🎬 APP
   return (
     <div style={{ minHeight: "100vh", background: "#141414", color: "white", fontFamily: "Arial", display: "flex", flexDirection: "column" }}>
 
       <div style={{ background: "#000", padding: isMobile ? "12px 16px" : "16px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ color: "#E50914", margin: 0, fontSize: isMobile ? 16 : 22, fontWeight: "bold" }}>🎬 {isMobile ? "MCM" : "My Current Medias"}</h1>
-          <span style={{ background: "#E50914", color: "white", fontSize: 10, fontWeight: "bold", padding: "2px 6px", borderRadius: 4 }}>BÊTA</span>
-        </div>
+        <Logo />
 
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
