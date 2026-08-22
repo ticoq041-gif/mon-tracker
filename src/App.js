@@ -11,7 +11,7 @@ import {
   doc, setDoc, getDoc
 } from "firebase/firestore";
 
-const API_KEY = "92d6d95f9796472b9e926158547d5267";
+const API_KEY = process.env.REACT_APP_TMDB_KEY;
 
 const getPlatform = (item) => {
   const title = encodeURIComponent(item.title);
